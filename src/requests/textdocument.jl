@@ -46,15 +46,36 @@ function textDocument_didSave_notification(params::DidSaveTextDocumentParams, se
     doc = getdocument(server, uri)
     if params.text isa String
         if get_text(doc) != params.text
-            println(stderr, "Mismatch between server and client text")
-            println(stderr, "========== BEGIN SERVER SIDE TEXT ==========")
-            println(stderr, get_text(doc))
-            println(stderr, "========== END SERVER SIDE TEXT ==========")
-            println(stderr, "========== BEGIN CLIENT SIDE TEXT ==========")
-            println(stderr, params.text)
-            println(stderr, "========== END CLIENT SIDE TEXT ==========")
-            JSONRPC.send(conn, window_showMessage_notification_type, ShowMessageParams(MessageTypes.Error, "Julia Extension: Please contact us! Your extension just crashed with a bug that we have been trying to replicate for a long time. You could help the development team a lot by contacting us at https://github.com/julia-vscode/julia-vscode so that we can work together to fix this issue."))
-            throw(LSSyncMismatch("Mismatch between server and client text for $(get_uri(doc)). _open_in_editor is $(doc._open_in_editor). _workspace_file is $(doc._workspace_file). _version is $(get_version(doc))."))
+            # println(stderr, "Mismatch between server and client text")
+            # println(stderr, "========== BEGIN SERVER SIDE TEXT ==========")
+            # println(stderr, get_text(doc))
+            # println(stderr, "========== END SERVER SIDE TEXT ==========")
+            # println(stderr, "========== BEGIN CLIENT SIDE TEXT ==========")
+            # println(stderr, params.text)
+            # println(stderr, "========== END CLIENT SIDE TEXT ==========")
+            # JSONRPC.send(conn, window_showMessage_notification_type, ShowMessageParams(MessageTypes.Error, "Julia Extension: Please contact us! Your extension just crashed with a bug that we have been trying to replicate for a long time. You could help the development team a lot by contacting us at https://github.com/julia-vscode/julia-vscode so that we can work together to fix this issue."))
+            # throw(LSSyncMismatch("Mismatch between server and client text for $(get_uri(doc)). _open_in_editor is $(doc._open_in_editor). _workspace_file is $(doc._workspace_file). _version is $(get_version(doc))."))
+
+            # NOTE: in Kate Editor this part of code was reached almost every time
+            #       the file was saved; it is better to simulate a file change
+            #       event any time that, at save time, the file is known to be
+            #       changed instead of causing an error that force the server to
+            #       restart
+
+            # simulate a document edit event
+            change_params = DidChangeTextDocumentParams(
+                # if this part of code was reached then the client file is
+                # different from the server one: its version should be updated
+                VersionedTextDocumentIdentifier(uri, get_version(doc)+1),
+                # sending a single event without ranges makes the whole server-side
+                # document to update
+                [TextDocumentContentChangeEvent(missing, missing, params.text)])
+
+            textDocument_didChange_notification(change_params, server, conn)
+
+            # now we can send a didSave notification safely
+            return textDocument_didSave_notification(
+                DidSaveTextDocumentParams(params.textDocument, missing), server, conn)
         end
     end
     parse_all(doc, server)

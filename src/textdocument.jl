@@ -112,8 +112,11 @@ end
 # =====================
 
 function _convert_lsrange_to_jlrange(doc::TextDocument, range::Range)
-    start_index_ls = index_at(doc, range.start)
-    stop_index = index_at(doc, range.stop)
+    # NOTE: on original implementation third parameter of index_at was
+    #       omitted (defaulted to `false`) but this made the server crash
+    #       every time a file was modified by deleting some line.
+    start_index_ls = index_at(doc, range.start, true)
+    stop_index = index_at(doc, range.stop, true)
 
     content = doc._content
 
